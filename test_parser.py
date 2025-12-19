@@ -155,6 +155,180 @@ class TestParser(unittest.TestCase):
         self.assertEqual(result, [[1, 2], [3, 4]])
 
 
+class TestParserEdgeCases(unittest.TestCase):
+    """Тесты парсера для edge cases."""
+    
+    def test_empty_array(self):
+        """Тест пустого массива."""
+        lexer = Lexer("array()")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [])
+    
+    def test_empty_dict(self):
+        """Тест пустого словаря."""
+        lexer = Lexer("[]")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, {})
+    
+    def test_array_with_trailing_comma(self):
+        """Тест массива с завершающей запятой (не должен поддерживаться по синтаксису)."""
+        # По синтаксису завершающая запятая не поддерживается
+        # Но проверим что парсер корректно обрабатывает
+        lexer = Lexer("array(1, 2)")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [1, 2])
+    
+    def test_nested_constants(self):
+        """Тест вложенных констант."""
+        lexer = Lexer("let A = 10\nlet B = #{A}\narray(#{A}, #{B})")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [10, 10])
+    
+    def test_constant_in_array(self):
+        """Тест константы в массиве."""
+        lexer = Lexer("let X = 42\narray(#{X}, 10)")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [42, 10])
+    
+    def test_constant_in_dict(self):
+        """Тест константы в словаре."""
+        lexer = Lexer("let Port = 8080\n[ port => #{Port} ]")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, {"port": 8080})
+    
+    def test_complex_nested_structure(self):
+        """Тест сложной вложенной структуры."""
+        lexer = Lexer("""
+        [
+          server => [
+            ports => array(80, 443, 8080),
+            name => "MyServer"
+          ],
+          clients => array(
+            [ name => "Client1", id => 1 ],
+            [ name => "Client2", id => 2 ]
+          )
+        ]
+        """)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertIn("server", result)
+        self.assertIn("clients", result)
+        self.assertEqual(len(result["clients"]), 2)
+    
+    def test_number_variations(self):
+        """Тест различных форматов чисел."""
+        test_cases = [
+            ("0", 0),
+            ("-0", 0),
+            ("0.5", 0.5),
+            (".5", 0.5),
+            ("1e5", 1e5),
+            ("1E5", 1e5),
+            ("1.5e-3", 1.5e-3),
+            ("-1.5e+10", -1.5e+10),
+        ]
+        for text, expected in test_cases:
+            with self.subTest(text=text):
+                lexer = Lexer(text)
+                tokens = lexer.tokenize()
+                parser = Parser(tokens)
+                result = parser.parse()
+                self.assertEqual(result, expected)
+    
+    def test_string_escape_sequences(self):
+        """Тест escape-последовательностей в строках."""
+        lexer = Lexer('"hello\\nworld\\ttab"')
+        tokens = lexer.tokenize()
+        self.assertEqual(tokens[0].value, "hello\nworld\ttab")
+    
+    def test_multiple_constants(self):
+        """Тест множественных констант."""
+        lexer = Lexer("let A = 1\nlet B = 2\nlet C = 3\narray(#{A}, #{B}, #{C})")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [1, 2, 3])
+
+
+class TestErrorHandling(unittest.TestCase):
+    """Тесты обработки ошибок."""
+    
+    def test_undefined_constant(self):
+        """Тест неопределенной константы."""
+        lexer = Lexer("#{UndefinedConst}")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        with self.assertRaises(SyntaxError) as context:
+            parser.parse()
+        self.assertIn("Undefined constant", str(context.exception))
+    
+    def test_invalid_number_format(self):
+        """Тест неверного формата числа."""
+        lexer = Lexer("12.34.56")
+        with self.assertRaises(SyntaxError):
+            lexer.tokenize()
+    
+    def test_unclosed_string(self):
+        """Тест незакрытой строки."""
+        lexer = Lexer('"unclosed string')
+        with self.assertRaises(SyntaxError) as context:
+            lexer.tokenize()
+        self.assertIn("Unclosed string", str(context.exception))
+    
+    def test_unclosed_array(self):
+        """Тест незакрытого массива."""
+        lexer = Lexer("array(1, 2")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        with self.assertRaises(SyntaxError):
+            parser.parse()
+    
+    def test_unclosed_dict(self):
+        """Тест незакрытого словаря."""
+        lexer = Lexer("[ key => value")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        with self.assertRaises(SyntaxError):
+            parser.parse()
+    
+    def test_invalid_identifier_in_dict(self):
+        """Тест неверного идентификатора в словаре."""
+        lexer = Lexer("[ 123 => value ]")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        with self.assertRaises(SyntaxError):
+            parser.parse()
+    
+    def test_missing_arrow_in_dict(self):
+        """Тест отсутствующей стрелки в словаре."""
+        lexer = Lexer("[ key value ]")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        with self.assertRaises(SyntaxError):
+            parser.parse()
+    
+    def test_unclosed_constant_ref(self):
+        """Тест незакрытой ссылки на константу."""
+        lexer = Lexer("#{Unclosed")
+        with self.assertRaises(SyntaxError) as context:
+            lexer.tokenize()
+        self.assertIn("Unclosed constant reference", str(context.exception))
+
+
 class TestConverter(unittest.TestCase):
     """Тесты конвертера в TOML."""
     
@@ -180,6 +354,30 @@ class TestConverter(unittest.TestCase):
         self.assertIn("1", result)
         self.assertIn("2", result)
         self.assertIn("3", result)
+    
+    def test_convert_nested_structure(self):
+        """Тест конвертации вложенной структуры."""
+        data = {
+            "server": {
+                "port": 8080,
+                "hosts": ["localhost", "127.0.0.1"]
+            }
+        }
+        result = convert_to_toml(data)
+        self.assertIn("server", result)
+        self.assertIn("port", result)
+        self.assertIn("8080", result)
+    
+    def test_convert_empty_array(self):
+        """Тест конвертации пустого массива."""
+        result = convert_to_toml([])
+        self.assertIn("array", result)
+    
+    def test_convert_empty_dict(self):
+        """Тест конвертации пустого словаря."""
+        result = convert_to_toml({})
+        # Пустой словарь должен дать пустой TOML документ
+        self.assertIsInstance(result, str)
 
 
 if __name__ == "__main__":

@@ -45,7 +45,13 @@ class Lexer:
     
     def error(self, message: str):
         """Выбросить ошибку лексического анализа."""
-        raise SyntaxError(f"Lexical error at position {self.pos}: {message}")
+        # Показываем контекст вокруг ошибки
+        start = max(0, self.pos - 20)
+        end = min(len(self.text), self.pos + 20)
+        context = self.text[start:end]
+        marker_pos = self.pos - start
+        marker = " " * marker_pos + "^"
+        raise SyntaxError(f"Lexical error at position {self.pos}: {message}\n  {context}\n  {marker}")
     
     def peek(self, offset: int = 0) -> Optional[str]:
         """Посмотреть символ вперед."""
@@ -69,24 +75,35 @@ class Lexer:
     def read_number(self) -> str:
         """Прочитать число."""
         start_pos = self.pos
+        has_digits = False
+        
         # Знак минус
         if self.peek() == '-':
             self.advance()
         
+        # Проверяем начинается ли с точки
+        starts_with_dot = self.peek() == '.'
+        
         # Целая часть
         if self.peek() and self.peek().isdigit():
+            has_digits = True
             while self.peek() and self.peek().isdigit():
                 self.advance()
-        elif self.peek() == '.':
-            pass  # Начинается с точки
-        else:
-            self.error("Invalid number format")
         
         # Дробная часть
         if self.peek() == '.':
             self.advance()
-            while self.peek() and self.peek().isdigit():
-                self.advance()
+            if self.peek() and self.peek().isdigit():
+                has_digits = True
+                while self.peek() and self.peek().isdigit():
+                    self.advance()
+            elif starts_with_dot and not has_digits:
+                # Число начинается с точки, но после точки нет цифр
+                self.error("Invalid number format: expected digits after decimal point")
+        
+        # Проверяем что было хотя бы одно число
+        if not has_digits:
+            self.error("Invalid number format: expected at least one digit")
         
         # Экспонента
         if self.peek() and self.peek().lower() == 'e':
@@ -94,7 +111,7 @@ class Lexer:
             if self.peek() in ('-', '+'):
                 self.advance()
             if not (self.peek() and self.peek().isdigit()):
-                self.error("Invalid exponent in number")
+                self.error("Invalid exponent in number: expected digits after 'e'")
             while self.peek() and self.peek().isdigit():
                 self.advance()
         
@@ -270,7 +287,16 @@ class Parser:
         """Выбросить ошибку синтаксического анализа."""
         if self.pos < len(self.tokens):
             token = self.tokens[self.pos]
-            raise SyntaxError(f"Syntax error at position {token.position}: {message}")
+            # Показываем предыдущие токены для контекста
+            context_tokens = []
+            start = max(0, self.pos - 3)
+            for i in range(start, min(self.pos + 1, len(self.tokens))):
+                if i < len(self.tokens):
+                    t = self.tokens[i]
+                    if t.type != TokenType.EOF:
+                        context_tokens.append(f"{t.type.name}({t.value})")
+            context = " ".join(context_tokens)
+            raise SyntaxError(f"Syntax error at position {token.position}: {message}\n  Context: {context}")
         else:
             raise SyntaxError(f"Syntax error: {message}")
     
