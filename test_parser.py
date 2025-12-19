@@ -262,6 +262,22 @@ class TestParserEdgeCases(unittest.TestCase):
         parser = Parser(tokens)
         result = parser.parse()
         self.assertEqual(result, [1, 2, 3])
+    
+    def test_boolean_values(self):
+        """Тест булевых значений."""
+        lexer = Lexer("[ enabled => true, disabled => false ]")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, {"enabled": True, "disabled": False})
+    
+    def test_boolean_in_array(self):
+        """Тест булевых значений в массиве."""
+        lexer = Lexer("array(true, false, true)")
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        result = parser.parse()
+        self.assertEqual(result, [True, False, True])
 
 
 class TestErrorHandling(unittest.TestCase):

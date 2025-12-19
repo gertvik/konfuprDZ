@@ -346,6 +346,17 @@ class Parser:
                 self.error(f"Undefined constant: {name}")
             return self.constants[name]
         
+        elif token.type == TokenType.IDENTIFIER:
+            # Поддержка булевых значений true/false
+            if token.value == "true":
+                self.advance()
+                return True
+            elif token.value == "false":
+                self.advance()
+                return False
+            else:
+                self.error(f"Unexpected identifier in value: {token.value}")
+        
         else:
             self.error(f"Unexpected token in value: {token.type.name}")
     
