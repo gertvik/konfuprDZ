@@ -1,0 +1,22 @@
+let DB_HOST = "localhost"
+let DB_PORT = 5432
+let MAX_CONNECTIONS = 100
+
+[
+  database => [
+    host => #{DB_HOST},
+    port => #{DB_PORT},
+    name => "mydb",
+    user => "admin",
+    password => "secret123",
+    max_connections => #{MAX_CONNECTIONS},
+    timeout => 30.5
+  ],
+  pool => [
+    min_size => 5,
+    max_size => #{MAX_CONNECTIONS},
+    idle_timeout => 300
+  ],
+  retry => array(1, 2, 3, 5, 8)
+]
+
